@@ -31,9 +31,9 @@ Vagrant.configure("2") do |config|
 
 
   # https://github.com/mitchellh/vagrant/pull/5765#issuecomment-120247738
-  #nodes.each do |node|
-  #  ANSIBLE_RAW_SSH_ARGS << "-o IdentityFile=#{ENV["VAGRANT_DOTFILE_PATH"]}/machines/#{node[:hostname]}/#{VAGRANT_VM_PROVIDER}/private_key"
-  #end
+  nodes.each do |node|
+    ANSIBLE_RAW_SSH_ARGS << "-o IdentityFile=.vagrant/machines/#{node[:hostname]}/#{VAGRANT_VM_PROVIDER}/private_key"
+  end
 
   nodes.each do |node|
     fqdn = node[:hostname] + '.' + node[:domain]
@@ -48,13 +48,13 @@ Vagrant.configure("2") do |config|
         virtualbox.name = fqdn
         virtualbox.memory = node[:memory] || default_ram
         virtualbox.cpus = node[:cpu] || default_cpu
-        override.vm.synced_folder './','/vagrant'
+        override.vm.synced_folder './','/vagrant', disabled: true
       end
 
       node_config.vm.provider :libvirt do |libvirt, override|
         libvirt.cpus = node[:cpu] || default_cpu
         libvirt.memory = node[:memory] || default_ram
-        override.vm.synced_folder './', '/vagrant', :nfs =>true, :mount_options => ["vers=3"]
+        override.vm.synced_folder './', '/vagrant', disabled: true
       end
 
       # Move to ip_address+1
@@ -63,7 +63,7 @@ Vagrant.configure("2") do |config|
       if node == nodes.last
         node_config.vm.provision "ansible" do |ansible|
           #ansible.inventory_path = "static_inventory"
-          #ansible.raw_ssh_args = ANSIBLE_RAW_SSH_ARGS
+          ansible.raw_ssh_args = ANSIBLE_RAW_SSH_ARGS
           ansible.limit = "all"
           ansible.playbook = "prep_docker.yml"
         end

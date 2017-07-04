@@ -8,6 +8,7 @@
   vars:
     distribution: "{{ ansible_distribution | lower }}"
     swarm_port: 2377
+    docker_release_channel: "edge"
   tasks:
     - name: ensure https apt transport exists
       package:
@@ -16,21 +17,23 @@
       with_items:
         - apt-transport-https
         - ca-certificates
+        - curl
+        - software-properties-common
 
     - name: add docker-engine apt key
       apt_key:
-        keyserver: 'hkp://p80.pool.sks-keyservers.net:80'
-        id: '58118E89F3A912897C070ADBF76221572C52609D'
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
 
     - name: add docker-engine apt repository
       apt_repository:
-        repo: "deb https://apt.dockerproject.org/repo {{ ansible_distribution | lower }}-{{ ansible_distribution_release }} main"
+        repo: "deb [arch={{ (ansible_architecture == 'x86_64') | ternary('amd64', ansible_architecture) }}] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} {{ docker_release_channel }}"
         update_cache: yes
         state: present
 
     - name: install the docker package
       package:
-        name: docker-engine
+        name: docker-ce
         state: present
 
     - name: ensure docker service will start on reboot
@@ -57,12 +60,6 @@
       - name: set join manager token fact
         set_fact: swarm_manager_token="{{ swarm_manager_token.stdout }}"
 
-      - name: fetch docker compose
-        get_url:
-          url: https://github.com/docker/compose/releases/download/1.13.0/docker-compose-Linux-x86_64
-          dest: /usr/bin/docker-compose
-          mode: 0755
-
       when: inventory_hostname in ['m01']  # perform tasks only on manager node
 
     - debug: var=hostvars['m01']['swarm_worker_token']
@@ -75,11 +72,3 @@
     - name: join manager nodes
       command: docker swarm join --token "{{ hostvars['m01']['swarm_manager_token'] }}" "{{ hostvars['m01']['ansible_eth1']['ipv4']['address'] }}:2377"
       when: inventory_hostname[0] == 'm' and inventory_hostname != 'm01'
-
-    - name: start the swarm visualizer on the manager node
-      command: docker run -it -d -p 3000:8080 -e HOST=m01 -v /var/run/docker.sock:/var/run/docker.sock manomarks/visualizer
-      when: inventory_hostname in ['m01']
-
-    - name: create an overlay network for a net001 app
-      command: docker network create net001 --driver overlay
-      when: inventory_hostname in ['m01']
