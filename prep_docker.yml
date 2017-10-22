@@ -12,6 +12,7 @@
     sysctl_items:
       vm.max_map_count: 262144
       vm.swappiness: 1
+      fs.inotify.max_user_instances: 8192
   tasks:
     - name: ensure https apt transport exists
       package:
