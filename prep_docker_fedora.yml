@@ -1,0 +1,86 @@
+---
+
+- name: setup swarm cluster on manager and worker nodes
+# =======================================================
+  hosts: all
+  gather_facts: true
+  become: true
+  vars:
+    distribution: "{{ ansible_distribution | lower }}"
+    swarm_port: 2377
+    docker_release_channel: "edge"
+    sysctl_items:
+      vm.max_map_count: 262144
+      vm.swappiness: 1
+      fs.inotify.max_user_instances: 8192
+  tasks:
+    - name: add docker-engine rpm key
+      rpm_key:
+        key: https://download.docker.com/linux/fedora/gpg
+        state: present
+
+    - name: add docker dnf repository
+      get_url:
+        url: https://download.docker.com/linux/fedora/docker-ce.repo
+        dest: /etc/yum.repos.d/
+        mode: 0644
+
+    - name: install the docker package
+      dnf:
+        enablerepo: docker-ce-edge
+        name: docker-ce
+        state: present
+
+    - name: ensure docker service will start on reboot
+      service:
+        name: docker
+        enabled: yes
+        state: started
+
+    - name: add vagrant user to docker group
+      user:
+        append: yes
+        groups: docker
+        name: vagrant
+
+    - name: "other pre-launch configuration tuning: sysctl"
+      sysctl:
+        name: "{{ item.key }}"
+        state: present
+        value: "{{ item.value }}"
+        sysctl_set: yes        
+        reload: yes
+      with_dict: "{{ sysctl_items }}"
+
+    - name: check swarm status
+      shell: docker info | grep ^Swarm | sed 's/^Swarm..//'
+      register: docker_info
+
+    - block:
+      - name: initialize a new swarm on manager node
+        command: docker swarm init --advertise-addr "{{ ansible_eth1["ipv4"]["address"] }}"
+        when: docker_info.stdout == "inactive"
+
+      - name: get join worker token for swarm
+        command: docker swarm join-token worker -q
+        register: swarm_worker_token
+
+      - name: get join worker token for swarm
+        command: docker swarm join-token manager -q
+        register: swarm_manager_token
+
+      - name: set join worker token fact
+        set_fact: swarm_worker_token="{{ swarm_worker_token.stdout }}"
+
+      - name: set join manager token fact
+        set_fact: swarm_manager_token="{{ swarm_manager_token.stdout }}"
+
+      when: inventory_hostname in ['m01']  # perform tasks only on manager node
+
+    - name: join worker nodes
+      command: docker swarm join --token "{{ hostvars['m01']['swarm_worker_token'] }}" "{{ hostvars['m01']['ansible_eth1']['ipv4']['address'] }}:2377"
+      when: inventory_hostname[0] == 'w' and docker_info.stdout == "inactive"
+
+    - name: join manager nodes
+      command: docker swarm join --token "{{ hostvars['m01']['swarm_manager_token'] }}" "{{ hostvars['m01']['ansible_eth1']['ipv4']['address'] }}:2377"
+      when: inventory_hostname[0] == 'm' and inventory_hostname != 'm01' and docker_info.stdout == "inactive"

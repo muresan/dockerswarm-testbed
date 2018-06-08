@@ -3,14 +3,14 @@
 
 require "ipaddr"
 
-boxname = "elastic/ubuntu-16.04-x86_64"
+boxname = "fedora/28-cloud-base"
 base_ip = "192.168.124.100"
 domain_name = "swarm.com"
 default_ram = 2048
 default_cpu = 2
 
-workers = 3
-masters = 3
+workers = 2
+masters = 1
 
 nodes = []
 
@@ -52,6 +52,8 @@ Vagrant.configure("2") do |config|
       end
 
       node_config.vm.provider :libvirt do |libvirt, override|
+        libvirt.cpu_mode = "custom"
+        libvirt.cpu_model = "qemu64"
         libvirt.cpus = node[:cpu] || default_cpu
         libvirt.memory = node[:memory] || default_ram
         override.vm.synced_folder './', '/vagrant', disabled: true
@@ -65,7 +67,8 @@ Vagrant.configure("2") do |config|
           #ansible.inventory_path = "static_inventory"
           ansible.raw_ssh_args = ANSIBLE_RAW_SSH_ARGS
           ansible.limit = "all"
-          ansible.playbook = "prep_docker.yml"
+          ansible.playbook = "prep_docker_fedora.yml"
+          ansible.extra_vars = { ansible_python_interpreter: "/usr/bin/python3" }
         end
       end
     end
