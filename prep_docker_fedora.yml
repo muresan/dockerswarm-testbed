@@ -16,12 +16,12 @@
   tasks:
     - name: add docker-engine rpm key
       rpm_key:
-        key: https://download.docker.com/linux/fedora/gpg
+        key: "https://download.docker.com/linux/{{ohai_platform}}/gpg"
         state: present
 
     - name: add docker dnf repository
       get_url:
-        url: https://download.docker.com/linux/fedora/docker-ce.repo
+        url: "https://download.docker.com/linux/{{ohai_platform}}/docker-ce.repo"
         dest: /etc/yum.repos.d/
         mode: 0644
 
